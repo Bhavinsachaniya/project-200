@@ -1,40 +1,50 @@
 import streamlit as st
-import pickle
 import pandas as pd
+import pickle
 
-# Load everything
+# Load your trained model and expected input columns
 model = pickle.load(open("lead_model.pkl", "rb"))
 model_columns = pickle.load(open("model_columns.pkl", "rb"))
-label_encoders = pickle.load(open("label_encoders.pkl", "rb"))
 
-@st.cache_data
-def load_data():
-    return pd.read_csv("Leads.csv")
+st.set_page_config(page_title="Lead Conversion Predictor", layout="centered")
+st.title("📊 Lead Conversion Predictor")
+st.write("Upload your lead data in CSV format to predict whether leads will convert.")
 
-df = load_data()
+# Upload section
+uploaded_file = st.file_uploader("📁 Upload Lead CSV File", type=["csv"])
 
-st.title("🔮 Predictive Lead Conversion App")
-st.write("Select a lead from the dataset to check if it will convert.")
-
-lead_index = st.selectbox("Select Lead Row Index", df.index)
-selected_lead = df.loc[lead_index]
-st.subheader("Selected Lead Details")
-st.dataframe(selected_lead.to_frame().T)
-
-if st.button("Predict Conversion"):
+if uploaded_file is not None:
     try:
-        input_features = selected_lead.drop(labels=["Prospect ID", "Lead Number", "Converted"], errors="ignore")
-        input_df = pd.DataFrame([input_features])
+        # Load and display uploaded CSV
+        df = pd.read_csv(uploaded_file)
+        st.subheader("📄 Uploaded Lead Data")
+        st.dataframe(df.head())
 
-        # Fill NA and apply label encoding
-        for col in input_df.columns:
-            if col in label_encoders:
-                input_df[col] = label_encoders[col].transform(input_df[col].astype(str))
-            else:
-                input_df[col] = input_df[col].fillna(0).astype(float)
+        # One-hot encoding (matching model training)
+        df_encoded = pd.get_dummies(df)
 
-        input_df = input_df[model_columns]
-        prediction = model.predict(input_df)[0]
-        st.success(f"Prediction: {'Converted ✅' if prediction == 1 else 'Not Converted ❌'}")
+        # Align with model's expected input structure
+        df_encoded = df_encoded.reindex(columns=model_columns, fill_value=0)
+
+        # Clean any missing values
+        df_encoded = df_encoded.fillna(0)
+
+        # Run predictions
+        predictions = model.predict(df_encoded)
+
+        # Add prediction results to the original DataFrame
+        df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely" for p in predictions]
+
+        # Show prediction results
+        st.subheader("✅ Prediction Results")
+        st.dataframe(df)
+
+        # Download button for results
+        csv_output = df.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Predictions", data=csv_output, file_name="lead_predictions.csv", mime='text/csv')
+
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error("⚠️ Error processing the file. Please ensure the CSV has correct structure.")
+        st.text(f"Error: {e}")
+else:
+    st.info("Please upload your lead CSV file to get started.")
