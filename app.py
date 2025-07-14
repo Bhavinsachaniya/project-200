@@ -20,19 +20,26 @@ if uploaded_file:
     st.dataframe(df.head())
 
     try:
-        df.fillna(0, inplace=True)  # Fill missing values
+        df.fillna(0, inplace=True)
 
-        # One-hot encoding to match model
         df_encoded = pd.get_dummies(df)
         df_encoded = df_encoded.reindex(columns=model_columns, fill_value=0)
         df_encoded = df_encoded.astype(float)
 
-        # Predict
         predictions = model.predict(df_encoded)
-        df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely to Convert" for p in predictions]
+        df["Prediction"] = predictions
+        df["Result"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely to Convert" for p in predictions]
 
-        st.subheader("📊 Prediction Results")
-        st.dataframe(df)
+        # Show only "Yes" predictions
+        st.subheader("✅ Leads Likely to Convert")
+        yes_leads = df[df["Prediction"] == 1]
+
+        if not yes_leads.empty:
+            st.dataframe(yes_leads)
+            csv = yes_leads.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇️ Download Likely Leads as CSV", csv, "likely_leads.csv", "text/csv")
+        else:
+            st.info("No leads were predicted as likely to convert.")
 
     except Exception as e:
         st.error("Prediction failed on uploaded data.")
@@ -61,7 +68,7 @@ with st.form("lead_form"):
 
     submitted = st.form_submit_button("🚀 Predict Conversion")
 
-# --- Prediction Logic ---
+# --- Manual Prediction Logic ---
 if submitted:
     input_dict = {
         "TotalVisits": total_visits,
