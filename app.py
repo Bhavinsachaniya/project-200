@@ -2,87 +2,81 @@ import streamlit as st
 import pandas as pd
 import pickle
 
-# Load model and required columns
+# --- Load model and required columns ---
 model = pickle.load(open("lead_model.pkl", "rb"))
 model_columns = pickle.load(open("model_columns.pkl", "rb"))
 
-# Page setup
-st.set_page_config(page_title="🔮 Lead Conversion Predictor", layout="centered")
-st.title("🔮 Predictive Lead Conversion App")
+# --- Page Config ---
+st.set_page_config(page_title="🔍 Predictive Lead Conversion AI", layout="centered")
+st.title("🔍 Predictive Lead Conversion AI")
+st.markdown("Enter lead details below to check if the user is likely to convert.")
 
-# -------- Load CSV --------
-st.markdown("Loaded from `Leads.csv` — Edit the values or predict all as-is.")
+# --- CSV Upload Section ---
+st.subheader("📁 Upload Leads CSV (Optional)")
+uploaded_file = st.file_uploader("Upload your leads.csv", type=["csv"])
 
-try:
-    # Load and clean data
-    df = pd.read_csv("Leads.csv")
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+    st.write("✅ Preview of Uploaded Data:")
+    st.dataframe(df.head())
 
-    # Show original data (top 100 rows for performance)
-    st.dataframe(df.head(100))
+    try:
+        df_encoded = pd.get_dummies(df)
+        df_encoded = df_encoded.reindex(columns=model_columns, fill_value=0)
+        df_encoded = df_encoded.astype(float)
+        predictions = model.predict(df_encoded)
 
-    # Encode
-    df_encoded = pd.get_dummies(df)
-    df_encoded = df_encoded.reindex(columns=model_columns, fill_value=0)
-    df_encoded = df_encoded.fillna(0)
-    df_encoded = df_encoded.astype(float)
+        df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely to Convert" for p in predictions]
+        st.subheader("📊 Prediction Results:")
+        st.dataframe(df)
 
-    # Predict
-    predictions = model.predict(df_encoded)
-    df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely to Convert" for p in predictions]
+    except Exception as e:
+        st.error("Prediction failed on uploaded data.")
+        st.text(f"Details: {e}")
 
-    st.subheader("📊 Predictions on CSV Leads")
-    st.dataframe(df)
+st.divider()
 
-except Exception as e:
-    st.error("Error while predicting from Leads.csv")
-    st.code(str(e))
+# --- Manual Form UI ---
+st.subheader("🧠 Predict Manually")
+with st.form("lead_form"):
+    total_visits = st.number_input("Total Visits", min_value=0, max_value=100, value=5)
+    total_time_spent = st.number_input("Total Time Spent on Website", min_value=0, max_value=200, value=10)
+    page_views = st.number_input("Page Views Per Visit", min_value=0, max_value=20, value=2)
 
-# -------- Manual Prediction --------
-st.subheader("🎯 Predict Manually")
+    lead_origin = st.selectbox("Lead Origin", [
+        "Landing Page Submission", "API", "Lead Add Form", "Lead Import"
+    ], index=0)
 
-with st.form("manual_predict_form"):
-    col1, col2 = st.columns(2)
+    lead_source = st.selectbox("Lead Source", [
+        "Google", "Direct Traffic", "Olark Chat", "Reference", "Welingak Website", "Facebook", "Others"
+    ], index=0)
 
-    with col1:
-        total_visits = st.number_input("Total Visits", min_value=0, max_value=100, value=5)
-        lead_origin = st.selectbox("Lead Origin", [
-            "Landing Page Submission", "API", "Lead Add Form", "Lead Import"
-        ])
-        do_not_email = st.selectbox("Do Not Email", ["Yes", "No"])
-
-    with col2:
-        page_views = st.number_input("Page Views Per Visit", min_value=0, max_value=20, value=2)
-        lead_source = st.selectbox("Lead Source", [
-            "Google", "Direct Traffic", "Olark Chat", "Reference", "Welingak Website", "Facebook", "Others"
-        ])
-        do_not_call = st.selectbox("Do Not Call", ["Yes", "No"])
+    do_not_email = st.selectbox("Do Not Email", ["Yes", "No"], index=1)
+    do_not_call = st.selectbox("Do Not Call", ["Yes", "No"], index=1)
 
     submitted = st.form_submit_button("🚀 Predict Conversion")
 
+# --- Manual Prediction Logic ---
 if submitted:
+    input_dict = {
+        "TotalVisits": total_visits,
+        "Total Time Spent on Website": total_time_spent,
+        "PageViewsPerVisit": page_views,
+        "Lead Origin": lead_origin,
+        "Lead Source": lead_source,
+        "Do Not Email": do_not_email,
+        "Do Not Call": do_not_call
+    }
+
+    input_df = pd.DataFrame([input_dict])
+    input_df_encoded = pd.get_dummies(input_df)
+    input_df_encoded = input_df_encoded.reindex(columns=model_columns, fill_value=0)
+    input_df_encoded = input_df_encoded.astype(float)
+
     try:
-        # Input dict and DataFrame
-        input_dict = {
-            "TotalVisits": total_visits,
-            "PageViewsPerVisit": page_views,
-            "Lead Origin": lead_origin,
-            "Lead Source": lead_source,
-            "Do Not Email": do_not_email,
-            "Do Not Call": do_not_call
-        }
-
-        input_df = pd.DataFrame([input_dict])
-
-        # Encode
-        input_encoded = pd.get_dummies(input_df)
-        input_encoded = input_encoded.reindex(columns=model_columns, fill_value=0)
-        input_encoded = input_encoded.fillna(0).astype(float)
-
-        # Predict
-        prediction = model.predict(input_encoded)[0]
+        prediction = model.predict(input_df_encoded)[0]
         result = "✅ Likely to Convert" if prediction == 1 else "❌ Not Likely to Convert"
         st.success(f"Prediction: {result}")
-
     except Exception as e:
         st.error("Prediction failed.")
-        st.code(str(e))
+        st.text(f"Details: {e}")
