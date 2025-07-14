@@ -2,16 +2,20 @@ import streamlit as st
 import pandas as pd
 import pickle
 
-# Load the model and the expected column structure
-model = pickle.load(open("lead_model.pkl", "rb"))
-model_columns = pickle.load(open("model_columns.pkl", "rb"))
+# Load the model and expected input columns
+try:
+    model = pickle.load(open("lead_model.pkl", "rb"))
+    model_columns = pickle.load(open("model_columns.pkl", "rb"))
+except Exception as e:
+    st.error("❌ Failed to load model or column structure.")
+    st.stop()
 
-# Streamlit App Setup
+# App title and config
 st.set_page_config(page_title="🔮 Predictive Lead Conversion App", layout="centered")
 st.title("🔮 Predictive Lead Conversion App")
 st.write("Upload your lead data CSV to predict which leads are likely to convert.")
 
-# File uploader
+# CSV upload
 uploaded_file = st.file_uploader("📁 Upload Lead CSV File", type=["csv"])
 
 if uploaded_file is not None:
@@ -21,38 +25,43 @@ if uploaded_file is not None:
         st.subheader("📄 Uploaded Data Preview")
         st.dataframe(df.head())
 
-        # One-hot encode categorical columns
+        # Validate structure
+        if df.empty:
+            st.error("⚠️ Uploaded file is empty.")
+            st.stop()
+
+        # Preprocess: one-hot encode, align columns
         df_encoded = pd.get_dummies(df)
 
-        # Align with model training columns
+        # Align with model structure
         df_encoded = df_encoded.reindex(columns=model_columns, fill_value=0)
 
-        # Clean data
+        # Clean: fill missing, ensure numeric
         df_encoded = df_encoded.fillna(0)
-        df_encoded = df_encoded.astype(float)  # ensure no text/nan/infinite values
+        df_encoded = df_encoded.apply(pd.to_numeric, errors='coerce').fillna(0)
 
-        # Optional Debug Info
-        # st.write("Model Input Preview:")
-        # st.dataframe(df_encoded.head())
-        # st.write("Any NaNs?", df_encoded.isna().sum().sum())
+        # Extra check for infinite or invalid values
+        if not df_encoded.replace([float("inf"), float("-inf")], 0).applymap(pd.api.types.is_number).all().all():
+            st.error("⚠️ Invalid or non-numeric values found in input.")
+            st.stop()
 
         # Predict
         predictions = model.predict(df_encoded)
 
-        # Attach predictions to original data
+        # Append predictions to original data
         df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely" for p in predictions]
 
-        # Show results
+        # Show predictions
         st.subheader("📈 Prediction Results")
         st.dataframe(df)
 
         # Download button
-        csv_output = df.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Results as CSV", data=csv_output, file_name="lead_predictions.csv", mime="text/csv")
+        result_csv = df.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Download Prediction Results", data=result_csv, file_name="lead_predictions.csv", mime="text/csv")
 
     except Exception as e:
-        st.error("⚠️ An error occurred while processing the file.")
-        st.text(f"Error details: {e}")
+        st.error("⚠️ Error processing file or predicting.")
+        st.text(f"Details: {e}")
 
 else:
     st.info("Please upload a CSV file to begin.")
