@@ -6,38 +6,43 @@ import pickle
 model = pickle.load(open("lead_model.pkl", "rb"))
 model_columns = pickle.load(open("model_columns.pkl", "rb"))
 
-# --- Page Config ---
+# --- Page Configuration ---
 st.set_page_config(page_title="🔍 Predictive Lead Conversion AI", layout="centered")
 st.title("🔍 Predictive Lead Conversion AI")
 st.markdown("Enter lead details below to check if the user is likely to convert.")
 
-# --- CSV Upload Section ---
-st.subheader("📁 Upload Leads CSV (Optional)")
-uploaded_file = st.file_uploader("Upload your leads.csv", type=["csv"])
+# --- Upload CSV Section ---
+uploaded_file = st.file_uploader("📂 Upload Leads CSV File (Optional)", type=["csv"])
 
 if uploaded_file:
+    st.subheader("📄 Uploaded Data Preview")
     df = pd.read_csv(uploaded_file)
-    st.write("✅ Preview of Uploaded Data:")
     st.dataframe(df.head())
 
     try:
+        df.fillna(0, inplace=True)  # Fill missing values
+
+        # One-hot encoding to match model
         df_encoded = pd.get_dummies(df)
         df_encoded = df_encoded.reindex(columns=model_columns, fill_value=0)
         df_encoded = df_encoded.astype(float)
-        predictions = model.predict(df_encoded)
 
+        # Predict
+        predictions = model.predict(df_encoded)
         df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely to Convert" for p in predictions]
-        st.subheader("📊 Prediction Results:")
+
+        st.subheader("📊 Prediction Results")
         st.dataframe(df)
 
     except Exception as e:
         st.error("Prediction failed on uploaded data.")
         st.text(f"Details: {e}")
 
-st.divider()
+st.markdown("---")
 
-# --- Manual Form UI ---
-st.subheader("🧠 Predict Manually")
+# --- Manual Entry Form ---
+st.subheader("🧮 Predict Manually")
+
 with st.form("lead_form"):
     total_visits = st.number_input("Total Visits", min_value=0, max_value=100, value=5)
     total_time_spent = st.number_input("Total Time Spent on Website", min_value=0, max_value=200, value=10)
@@ -56,7 +61,7 @@ with st.form("lead_form"):
 
     submitted = st.form_submit_button("🚀 Predict Conversion")
 
-# --- Manual Prediction Logic ---
+# --- Prediction Logic ---
 if submitted:
     input_dict = {
         "TotalVisits": total_visits,
