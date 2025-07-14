@@ -2,39 +2,45 @@ import streamlit as st
 import pandas as pd
 import pickle
 
-# Load model and columns
+# Load model and required columns
 model = pickle.load(open("lead_model.pkl", "rb"))
 model_columns = pickle.load(open("model_columns.pkl", "rb"))
 
-# Load leads from CSV
-leads_df = pd.read_csv("Leads.csv")
-
-# Streamlit Page Setup
+# Page setup
 st.set_page_config(page_title="🔮 Lead Conversion Predictor", layout="centered")
 st.title("🔮 Predictive Lead Conversion App")
-st.markdown("Loaded from `Leads.csv` — Edit the values or predict all below.")
 
-# --------- Prediction on CSV ---------
-st.subheader("📊 Predictions from Leads.csv")
+# -------- Load CSV --------
+st.markdown("Loaded from `Leads.csv` — Edit the values or predict all as-is.")
 
-# Encode and predict
-leads_encoded = pd.get_dummies(leads_df)
-leads_encoded = leads_encoded.reindex(columns=model_columns, fill_value=0)
-leads_encoded = leads_encoded.fillna(0).astype(float)
-
-# Predict
 try:
-    predictions = model.predict(leads_encoded)
-    leads_df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely to Convert" for p in predictions]
-    st.dataframe(leads_df)
+    # Load and clean data
+    df = pd.read_csv("Leads.csv")
+
+    # Show original data (top 100 rows for performance)
+    st.dataframe(df.head(100))
+
+    # Encode
+    df_encoded = pd.get_dummies(df)
+    df_encoded = df_encoded.reindex(columns=model_columns, fill_value=0)
+    df_encoded = df_encoded.fillna(0)
+    df_encoded = df_encoded.astype(float)
+
+    # Predict
+    predictions = model.predict(df_encoded)
+    df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely to Convert" for p in predictions]
+
+    st.subheader("📊 Predictions on CSV Leads")
+    st.dataframe(df)
+
 except Exception as e:
-    st.error("Prediction on CSV failed.")
-    st.text(f"Details: {e}")
+    st.error("Error while predicting from Leads.csv")
+    st.code(str(e))
 
-# --------- Manual Form ---------
-st.subheader("🧮 Predict Manually")
+# -------- Manual Prediction --------
+st.subheader("🎯 Predict Manually")
 
-with st.form("lead_form"):
+with st.form("manual_predict_form"):
     col1, col2 = st.columns(2)
 
     with col1:
@@ -45,7 +51,7 @@ with st.form("lead_form"):
         do_not_email = st.selectbox("Do Not Email", ["Yes", "No"])
 
     with col2:
-        page_views = st.number_input("Page Views Per Visit", min_value=0, max_value=20, value=3)
+        page_views = st.number_input("Page Views Per Visit", min_value=0, max_value=20, value=2)
         lead_source = st.selectbox("Lead Source", [
             "Google", "Direct Traffic", "Olark Chat", "Reference", "Welingak Website", "Facebook", "Others"
         ])
@@ -53,26 +59,30 @@ with st.form("lead_form"):
 
     submitted = st.form_submit_button("🚀 Predict Conversion")
 
-# Manual Prediction
 if submitted:
-    input_dict = {
-        "TotalVisits": total_visits,
-        "PageViewsPerVisit": page_views,
-        "Lead Origin": lead_origin,
-        "Lead Source": lead_source,
-        "Do Not Email": do_not_email,
-        "Do Not Call": do_not_call
-    }
-
-    input_df = pd.DataFrame([input_dict])
-    input_encoded = pd.get_dummies(input_df)
-    input_encoded = input_encoded.reindex(columns=model_columns, fill_value=0)
-    input_encoded = input_encoded.fillna(0).astype(float)
-
     try:
+        # Input dict and DataFrame
+        input_dict = {
+            "TotalVisits": total_visits,
+            "PageViewsPerVisit": page_views,
+            "Lead Origin": lead_origin,
+            "Lead Source": lead_source,
+            "Do Not Email": do_not_email,
+            "Do Not Call": do_not_call
+        }
+
+        input_df = pd.DataFrame([input_dict])
+
+        # Encode
+        input_encoded = pd.get_dummies(input_df)
+        input_encoded = input_encoded.reindex(columns=model_columns, fill_value=0)
+        input_encoded = input_encoded.fillna(0).astype(float)
+
+        # Predict
         prediction = model.predict(input_encoded)[0]
         result = "✅ Likely to Convert" if prediction == 1 else "❌ Not Likely to Convert"
         st.success(f"Prediction: {result}")
+
     except Exception as e:
-        st.error("Manual prediction failed.")
-        st.text(f"Details: {e}")
+        st.error("Prediction failed.")
+        st.code(str(e))
