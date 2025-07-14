@@ -19,15 +19,15 @@ with st.form("lead_form"):
         total_visits = st.number_input("Total Visits", min_value=0, max_value=100, value=5)
         lead_origin = st.selectbox("Lead Origin", [
             "Landing Page Submission", "API", "Lead Add Form", "Lead Import"
-        ])
-        do_not_email = st.selectbox("Do Not Email", ["Yes", "No"])
+        ], index=0)
+        do_not_email = st.selectbox("Do Not Email", ["Yes", "No"], index=0)
 
     with col2:
-        page_views = st.number_input("Page Views Per Visit", min_value=0, max_value=20, value=2)
+        page_views = st.number_input("Page Views Per Visit", min_value=0, max_value=20, value=3)
         lead_source = st.selectbox("Lead Source", [
             "Google", "Direct Traffic", "Olark Chat", "Reference", "Welingak Website", "Facebook", "Others"
-        ])
-        do_not_call = st.selectbox("Do Not Call", ["Yes", "No"])
+        ], index=1)
+        do_not_call = st.selectbox("Do Not Call", ["Yes", "No"], index=0)
 
     submitted = st.form_submit_button("🚀 Predict Conversion")
 
