@@ -2,66 +2,62 @@ import streamlit as st
 import pandas as pd
 import pickle
 
-# Load the model and expected input columns
-try:
-    model = pickle.load(open("lead_model.pkl", "rb"))
-    model_columns = pickle.load(open("model_columns.pkl", "rb"))
-except Exception as e:
-    st.error("❌ Failed to load model or column structure.")
-    st.stop()
+# Load model and expected columns
+model = pickle.load(open("lead_model.pkl", "rb"))
+model_columns = pickle.load(open("model_columns.pkl", "rb"))
 
-# App title and config
-st.set_page_config(page_title="🔮 Predictive Lead Conversion App", layout="centered")
+# Streamlit Page Config
+st.set_page_config(page_title="🔮 Lead Conversion Predictor", layout="centered")
 st.title("🔮 Predictive Lead Conversion App")
-st.write("Upload your lead data CSV to predict which leads are likely to convert.")
+st.markdown("Enter lead details to predict conversion probability.")
 
-# CSV upload
-uploaded_file = st.file_uploader("📁 Upload Lead CSV File", type=["csv"])
+# --- UI FORM ---
+with st.form("lead_form"):
+    col1, col2 = st.columns(2)
 
-if uploaded_file is not None:
+    with col1:
+        total_visits = st.number_input("Total Visits", min_value=0, max_value=100, value=5)
+        lead_origin = st.selectbox("Lead Origin", [
+            "Landing Page Submission", "API", "Lead Add Form", "Lead Import"
+        ])
+        do_not_email = st.selectbox("Do Not Email", ["Yes", "No"])
+
+    with col2:
+        page_views = st.number_input("Page Views Per Visit", min_value=0, max_value=20, value=2)
+        lead_source = st.selectbox("Lead Source", [
+            "Google", "Direct Traffic", "Olark Chat", "Reference", "Welingak Website", "Facebook", "Others"
+        ])
+        do_not_call = st.selectbox("Do Not Call", ["Yes", "No"])
+
+    submitted = st.form_submit_button("🚀 Predict Conversion")
+
+# --- Prediction Logic ---
+if submitted:
+    # Create input dictionary
+    input_dict = {
+        "TotalVisits": total_visits,
+        "PageViewsPerVisit": page_views,
+        "Lead Origin": lead_origin,
+        "Lead Source": lead_source,
+        "Do Not Email": do_not_email,
+        "Do Not Call": do_not_call
+    }
+
+    # Convert to DataFrame
+    input_df = pd.DataFrame([input_dict])
+
+    # One-hot encoding to match model training
+    input_df_encoded = pd.get_dummies(input_df)
+
+    # Align with model structure
+    input_df_encoded = input_df_encoded.reindex(columns=model_columns, fill_value=0)
+    input_df_encoded = input_df_encoded.fillna(0)
+    input_df_encoded = input_df_encoded.astype(float)
+
     try:
-        # Load CSV
-        df = pd.read_csv(uploaded_file)
-        st.subheader("📄 Uploaded Data Preview")
-        st.dataframe(df.head())
-
-        # Validate structure
-        if df.empty:
-            st.error("⚠️ Uploaded file is empty.")
-            st.stop()
-
-        # Preprocess: one-hot encode, align columns
-        df_encoded = pd.get_dummies(df)
-
-        # Align with model structure
-        df_encoded = df_encoded.reindex(columns=model_columns, fill_value=0)
-
-        # Clean: fill missing, ensure numeric
-        df_encoded = df_encoded.fillna(0)
-        df_encoded = df_encoded.apply(pd.to_numeric, errors='coerce').fillna(0)
-
-        # Extra check for infinite or invalid values
-        if not df_encoded.replace([float("inf"), float("-inf")], 0).applymap(pd.api.types.is_number).all().all():
-            st.error("⚠️ Invalid or non-numeric values found in input.")
-            st.stop()
-
-        # Predict
-        predictions = model.predict(df_encoded)
-
-        # Append predictions to original data
-        df["Prediction"] = ["✅ Likely to Convert" if p == 1 else "❌ Not Likely" for p in predictions]
-
-        # Show predictions
-        st.subheader("📈 Prediction Results")
-        st.dataframe(df)
-
-        # Download button
-        result_csv = df.to_csv(index=False).encode("utf-8")
-        st.download_button("📥 Download Prediction Results", data=result_csv, file_name="lead_predictions.csv", mime="text/csv")
-
+        prediction = model.predict(input_df_encoded)[0]
+        result = "✅ Likely to Convert" if prediction == 1 else "❌ Not Likely to Convert"
+        st.success(f"Prediction: {result}")
     except Exception as e:
-        st.error("⚠️ Error processing file or predicting.")
+        st.error("Prediction failed due to input mismatch or model issue.")
         st.text(f"Details: {e}")
-
-else:
-    st.info("Please upload a CSV file to begin.")
